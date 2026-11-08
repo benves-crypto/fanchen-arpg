@@ -46,15 +46,16 @@ func _scene_and_combat() -> void:
 		and is_equal_approx(player.velocity.length(), player.SPEED), "Diagonal movement is normalized")
 
 	trial.hud.mobile = true
+	await _touch_layout(trial.hud)
 	var pad: Vector2 = trial.hud.pad
-	_touch(0, pad + Vector2(29, 0), true)
+	_touch(0, pad + Vector2(39, 0), true)
 	_check(player.touch_move.x > 0.5, "Screen touch captures joystick finger")
 	var drag := InputEventScreenDrag.new()
 	drag.index = 0
 	drag.position = pad + Vector2(0, 35)
 	root.push_input(drag, true)
 	_check(player.touch_move.y > 0.5, "Screen drag updates movement")
-	_touch(1, trial.hud.controls[&"dodge"], true)
+	_touch(1, trial.hud.controls[&"dodge"] + Vector2(0, 52), true)
 	await _wait(0.05)
 	_check(player.dodge_cooldown > 0.0 and not player.take_hit(20),
 		"Second touch triggers dodge and dodge grants brief invulnerability")
@@ -104,6 +105,30 @@ func _scene_and_combat() -> void:
 	await process_frame
 	_check(current_scene != null and current_scene.player.vitals.hp == 100 and not paused,
 		"Restart touch reloads the trial with full health")
+
+
+func _touch_layout(hud: Control) -> void:
+	var original_size := root.size
+	for window_size in [Vector2i(1280, 720), Vector2i(2772, 1272), Vector2i(2635, 1106)]:
+		root.size = window_size
+		await process_frame
+		await process_frame
+		var safe: Rect2 = hud.safe
+		var attack: Vector2 = hud.controls[&"attack"]
+		var sword: Vector2 = hud.controls[&"sword_skill"]
+		var dodge: Vector2 = hud.controls[&"dodge"]
+		_check(is_equal_approx(root.get_visible_rect().size.y, 720.0)
+			and absf(root.get_visible_rect().size.x - 720.0 * window_size.aspect()) < 2.0,
+			"Viewport expands to match %s" % window_size)
+		_check(safe.grow(-110).has_point(hud.pad) and safe.grow(-95).has_point(attack)
+			and safe.grow(-95).has_point(sword) and safe.grow(-95).has_point(dodge),
+			"Touch controls stay inset at %s" % window_size)
+		_check(attack.distance_to(sword) > 116.0 and attack.distance_to(dodge) > 116.0
+			and sword.distance_to(dodge) > 108.0 and sword.y < attack.y and dodge.x < attack.x,
+			"Combat hit areas are distinct at %s" % window_size)
+	root.size = original_size
+	await process_frame
+	await process_frame
 
 
 func _play_trial() -> void:

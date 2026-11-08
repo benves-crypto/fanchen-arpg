@@ -4,7 +4,9 @@ const INK := Color("#152b26eb")
 const MINT := Color("#c8f4d8")
 const GOLD := Color("#f0c686")
 const MUTED := Color("#adcbba")
-const PAD_RADIUS := 59.0
+const PAD_RADIUS := 72.0
+const BUTTON_RADII := {&"attack": 58.0, &"sword_skill": 50.0, &"dodge": 50.0}
+const BUTTON_HIT_MARGIN := 4.0
 
 var trial
 var mobile := false
@@ -42,14 +44,15 @@ func _layout() -> void:
 		if inset.has_area():
 			safe = inset
 	safe = safe.grow(-22)
-	pad = safe.position + Vector2(84, safe.size.y - 83)
+	pad = Vector2(safe.position.x + 118, safe.end.y - 118)
 	var corner := safe.end
 	controls = {
-		&"attack": corner - Vector2(63, 64),
-		&"sword_skill": corner - Vector2(163, 109),
-		&"dodge": corner - Vector2(261, 55),
+		&"attack": corner - Vector2(98, 101),
+		&"sword_skill": corner - Vector2(155, 209),
+		&"dodge": corner - Vector2(229, 101),
 	}
-	pause_rect = Rect2(Vector2(corner.x - 76, safe.position.y), Vector2(76, 42))
+	var pause_size := Vector2(92, 52) if mobile else Vector2(76, 42)
+	pause_rect = Rect2(Vector2(corner.x - pause_size.x, safe.position.y), pause_size)
 	modal = Rect2(safe.get_center() - Vector2(248, 145), Vector2(496, 290))
 	restart_rect = Rect2(modal.position + Vector2(261, 218), Vector2(174, 46))
 	resume_rect = Rect2(modal.position + Vector2(60, 218), Vector2(174, 46))
@@ -92,7 +95,7 @@ func _press(point: Vector2, finger := -1) -> bool:
 		_move_stick(point)
 		return true
 	for action in controls:
-		var radius := 47.0 if action == &"attack" else 42.0
+		var radius: float = BUTTON_RADII[action] + BUTTON_HIT_MARGIN
 		if point.distance_to(controls[action]) <= radius:
 			trial.player.request(action)
 			return true
@@ -159,19 +162,20 @@ func _draw() -> void:
 func _draw_touch(player: CharacterBody2D) -> void:
 	draw_circle(pad, PAD_RADIUS, Color("#142d27b4"))
 	draw_arc(pad, PAD_RADIUS, 0, TAU, 42, Color("#96bfaa9c"), 2.0)
-	draw_circle(pad + stick * 39, 23, Color("#a0d9bcc0"))
-	_touch_button(&"attack", "攻击", 47.0, true)
-	_touch_button(&"sword_skill", "御剑 " + _cooldown(player.skill_cooldown), 42.0,
+	draw_circle(pad + stick * 45, 25, Color("#a0d9bcc0"))
+	_touch_button(&"attack", "攻击", true)
+	_touch_button(&"sword_skill", "御剑 " + _cooldown(player.skill_cooldown),
 		player.skill_cooldown == 0.0 and player.mp >= player.SKILL_COST)
-	_touch_button(&"dodge", "闪避 " + _cooldown(player.dodge_cooldown), 42.0,
+	_touch_button(&"dodge", "闪避 " + _cooldown(player.dodge_cooldown),
 		player.dodge_cooldown == 0.0)
 
 
-func _touch_button(action: StringName, label: String, radius: float, available: bool) -> void:
+func _touch_button(action: StringName, label: String, available: bool) -> void:
 	var center: Vector2 = controls[action]
+	var radius: float = BUTTON_RADII[action]
 	draw_circle(center, radius, Color("#182c24ca"))
 	draw_arc(center, radius, 0, TAU, 36, GOLD if available else Color("#777c6e"), 2.0)
-	_center(label.strip_edges(), center + Vector2(0, 6), 17, MINT if available else MUTED)
+	_center(label.strip_edges(), center + Vector2(0, 7), 20, MINT if available else MUTED)
 
 
 func _draw_modal() -> void:
