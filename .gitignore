@@ -23,3 +23,21 @@ mono_crash.*.json
 *.exe
 # Uncomment if your project does not version PCK files as runtime dependencies.
 # *.pck
+
+# Local exports, editor/OS temporary files and credentials
+*.apk
+*.aab
+*.keystore
+*.jks
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Keep source sidecars (*.uid and *.import); .godot/ and .import/ are caches.
