@@ -4,8 +4,10 @@ const INK := Color("#152b26eb")
 const MINT := Color("#c8f4d8")
 const GOLD := Color("#f0c686")
 const MUTED := Color("#adcbba")
-const PAD_RADIUS := 72.0
-const BUTTON_RADII := {&"attack": 58.0, &"sword_skill": 50.0, &"dodge": 50.0}
+const PAD_RADIUS := 130.0
+const STICK_TRAVEL := 76.0
+const STICK_KNOB_RADIUS := 44.0
+const BUTTON_RADII := {&"attack": 74.0, &"sword_skill": 60.0, &"dodge": 60.0}
 const BUTTON_HIT_MARGIN := 4.0
 
 var trial
@@ -44,12 +46,13 @@ func _layout() -> void:
 		if inset.has_area():
 			safe = inset
 	safe = safe.grow(-22)
-	pad = Vector2(safe.position.x + 118, safe.end.y - 118)
+	pad = Vector2(safe.position.x + clampf(safe.size.x * 0.18, 205.0, 295.0), safe.end.y - 180.0)
 	var corner := safe.end
+	var attack := corner - Vector2(clampf(safe.size.x * 0.17, 220.0, 280.0), 164.0)
 	controls = {
-		&"attack": corner - Vector2(98, 101),
-		&"sword_skill": corner - Vector2(155, 209),
-		&"dodge": corner - Vector2(229, 101),
+		&"attack": attack,
+		&"sword_skill": attack + Vector2(125, -84),
+		&"dodge": attack + Vector2(125, 87),
 	}
 	var pause_size := Vector2(92, 52) if mobile else Vector2(76, 42)
 	pause_rect = Rect2(Vector2(corner.x - pause_size.x, safe.position.y), pause_size)
@@ -103,7 +106,7 @@ func _press(point: Vector2, finger := -1) -> bool:
 
 
 func _move_stick(point: Vector2) -> void:
-	stick = ((point - pad) / (PAD_RADIUS - 13.0)).limit_length()
+	stick = ((point - pad) / STICK_TRAVEL).limit_length()
 	trial.player.touch_move = stick if stick.length() >= 0.17 else Vector2.ZERO
 
 
@@ -161,8 +164,11 @@ func _draw() -> void:
 
 func _draw_touch(player: CharacterBody2D) -> void:
 	draw_circle(pad, PAD_RADIUS, Color("#142d27b4"))
-	draw_arc(pad, PAD_RADIUS, 0, TAU, 42, Color("#96bfaa9c"), 2.0)
-	draw_circle(pad + stick * 45, 25, Color("#a0d9bcc0"))
+	draw_arc(pad, PAD_RADIUS, 0, TAU, 64, Color("#96bfaa9c"), 3.0, true)
+	draw_arc(pad, PAD_RADIUS - 15.0, 0, TAU, 64, Color("#96bfaa50"), 2.0, true)
+	var knob := pad + stick * STICK_TRAVEL
+	draw_circle(knob, STICK_KNOB_RADIUS, Color("#42775fee"), true, -1.0, true)
+	draw_arc(knob, STICK_KNOB_RADIUS, 0, TAU, 48, MINT, 2.0, true)
 	_touch_button(&"attack", "攻击", true)
 	_touch_button(&"sword_skill", "御剑 " + _cooldown(player.skill_cooldown),
 		player.skill_cooldown == 0.0 and player.mp >= player.SKILL_COST)
@@ -173,9 +179,12 @@ func _draw_touch(player: CharacterBody2D) -> void:
 func _touch_button(action: StringName, label: String, available: bool) -> void:
 	var center: Vector2 = controls[action]
 	var radius: float = BUTTON_RADII[action]
-	draw_circle(center, radius, Color("#182c24ca"))
-	draw_arc(center, radius, 0, TAU, 36, GOLD if available else Color("#777c6e"), 2.0)
-	_center(label.strip_edges(), center + Vector2(0, 7), 20, MINT if available else MUTED)
+	var primary := action == &"attack"
+	var rim := GOLD if available else Color("#777c6e")
+	draw_circle(center, radius, Color("#493a24e0") if primary else Color("#182c24e0"), true, -1.0, true)
+	draw_arc(center, radius, 0, TAU, 48, rim, 4.0 if primary else 3.0, true)
+	var font_size := 30 if primary else 24
+	_center(label.strip_edges(), center + Vector2(0, font_size / 3.0), font_size, MINT if available else MUTED)
 
 
 func _draw_modal() -> void:
