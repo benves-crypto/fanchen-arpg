@@ -61,7 +61,7 @@ jobs:
           sdkmanager "platform-tools" "build-tools;35.0.1" "platforms;android-35" "cmake;3.10.2.4988404" "ndk;28.1.13356709"
           mkdir -p "$HOME/.config/godot" "$HOME/.android"
           keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -validity 10000
-          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" "$HOME/.android/debug.keystore" > "$HOME/.config/godot/editor_settings-4.tres"
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" "$HOME/.android/debug.keystore" > "$HOME/.config/godot/editor_settings-4.7.tres"
       - name: Build Android debug APK
         if: steps.project.outputs.android == 'true'
         shell: bash
@@ -69,9 +69,10 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/apk"
           "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" --headless --path . --export-debug Android "$RUNNER_TEMP/apk/fanchen-debug.apk"
+          "$ANDROID_HOME/build-tools/35.0.1/apksigner" verify "$RUNNER_TEMP/apk/fanchen-debug.apk"
       - uses: actions/upload-artifact@v4
         if: steps.project.outputs.android == 'true'
         with:
           name: android-debug-apk
           path: ${{ runner.temp }}/apk/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error

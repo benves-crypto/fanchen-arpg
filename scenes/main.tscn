@@ -3,6 +3,22 @@
 [ext_resource type="Script" path="res://scripts/world/trial.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/world/bamboo_grove.gd" id="2"]
 [ext_resource type="Script" path="res://scripts/ui/trial_hud.gd" id="3"]
+[ext_resource type="AudioStream" path="res://assets/audio/forest_whisper.ogg" id="4"]
+[ext_resource type="AudioStream" path="res://assets/audio/slash.wav" id="5"]
+[ext_resource type="AudioStream" path="res://assets/audio/dodge.wav" id="6"]
+[ext_resource type="AudioStream" path="res://assets/audio/cast.wav" id="7"]
+[ext_resource type="AudioStream" path="res://assets/audio/hit.wav" id="8"]
+[ext_resource type="AudioStream" path="res://assets/audio/pickup.wav" id="9"]
+[ext_resource type="AudioStream" path="res://assets/audio/heal.wav" id="10"]
+[ext_resource type="AudioStream" path="res://assets/audio/bamboo_birds.ogg" id="11"]
+[ext_resource type="AudioStream" path="res://assets/audio/footstep.wav" id="12"]
+[ext_resource type="AudioStream" path="res://assets/audio/wolf_attack.wav" id="13"]
+[ext_resource type="AudioStream" path="res://assets/audio/spider_attack.wav" id="14"]
+[ext_resource type="AudioStream" path="res://assets/audio/switch.wav" id="15"]
+[ext_resource type="AudioStream" path="res://assets/audio/gate.wav" id="16"]
+[ext_resource type="AudioStream" path="res://assets/audio/victory.wav" id="17"]
+[ext_resource type="AudioStream" path="res://assets/audio/defeat.wav" id="18"]
+[ext_resource type="Script" path="res://scripts/audio/trial_audio.gd" id="19"]
 
 [node name="BambooTrial" type="Node2D"]
 script = ExtResource("1")
@@ -12,6 +28,71 @@ script = ExtResource("2")
 
 [node name="Scenery" type="Node2D" parent="Grove"]
 y_sort_enabled = true
+
+[node name="Audio" type="Node" parent="."]
+script = ExtResource("19")
+
+[node name="Music" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("4")
+volume_db = 2.0
+
+[node name="Slash" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("5")
+volume_db = -9.0
+
+[node name="Dodge" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("6")
+volume_db = -12.0
+
+[node name="Cast" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("7")
+volume_db = -11.0
+
+[node name="Hit" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("8")
+volume_db = -14.0
+
+[node name="Pickup" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("9")
+volume_db = -11.0
+
+[node name="Heal" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("10")
+volume_db = -11.0
+
+[node name="Ambience" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("11")
+volume_db = -16.0
+
+[node name="Footstep" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("12")
+volume_db = -15.0
+
+[node name="WolfAttack" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("13")
+volume_db = -10.0
+
+[node name="SpiderAttack" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("14")
+volume_db = -8.0
+
+[node name="Switch" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("15")
+volume_db = -12.0
+
+[node name="Gate" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("16")
+volume_db = -8.0
+
+[node name="Victory" type="AudioStreamPlayer" parent="Audio"]
+process_mode = 3
+stream = ExtResource("17")
+volume_db = -8.0
+
+[node name="Defeat" type="AudioStreamPlayer" parent="Audio"]
+process_mode = 3
+stream = ExtResource("18")
+volume_db = -8.0
 
 [node name="Interface" type="CanvasLayer" parent="."]
 

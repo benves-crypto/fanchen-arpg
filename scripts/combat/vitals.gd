@@ -1,6 +1,6 @@
 extends Node
 
-signal damaged(amount: int)
+signal damaged(amount: int, critical: bool)
 signal died
 
 @export var max_hp := 100
@@ -9,12 +9,12 @@ signal died
 var invulnerable := false
 
 
-func hurt(power: int) -> bool:
+func hurt(power: int, critical := false) -> bool:
 	if hp <= 0 or invulnerable or power <= 0:
 		return false
 	var amount := mini(hp, maxi(1, power - defense))
 	hp -= amount
-	damaged.emit(amount)
+	damaged.emit(amount, critical)
 	if hp == 0:
 		died.emit()
 	return true
