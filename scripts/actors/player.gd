@@ -15,6 +15,8 @@ const Shot := preload("res://scripts/combat/projectile.gd")
 enum Reaction { NONE, DODGE, SWITCH }
 
 const PERFECT_WINDOW := 0.12
+const PERFECT_SWITCH_WINDOW := 0.18
+const DODGE_REACTION_SCAN := 0.08
 const PERFECT_DODGE_IFRAMES := 0.30
 const PERFECT_SWITCH_IFRAMES := 0.24
 const COUNTER_WINDOW := 0.85
@@ -216,9 +218,6 @@ func _physics_process(delta: float) -> void:
 				pending[&"attack"] = dodge_time + delta
 			dodge_cooldown = DODGE_RECOVERY
 			dodged.emit()
-			var threat: Node2D = find_threat.call(self) if find_threat.is_valid() else null
-			if threat != null:
-				arm_counter(Reaction.DODGE, threat)
 		elif pending.has(&"attack") and parry_time == 0.0 and (counter_time > 0.0 or swing_cooldown == 0.0):
 			pending.erase(&"attack")
 			if mouse_aim:
@@ -261,6 +260,12 @@ func _physics_process(delta: float) -> void:
 			clear_parry()
 			ultimate = 0.0
 			_cast(Shot.Form.NOVA, attack + 45, 8, TAU / 8.0)
+	# Check before moving this tick, while the incoming attack can still reach us.
+	if dodge_time > 0.0 and DODGE_DURATION - dodge_time <= DODGE_REACTION_SCAN:
+		if reaction != Reaction.DODGE and find_threat.is_valid():
+			var threat: Node2D = find_threat.call(self)
+			if threat != null:
+				arm_counter(Reaction.DODGE, threat)
 	if strike_time > 0.0:
 		strike_time = maxf(0.0, strike_time - delta)
 		if strike_time == 0.0:

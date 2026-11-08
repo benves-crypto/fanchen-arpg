@@ -17,6 +17,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _trial_entry_and_scoring()
+	await _difficulty_progression()
 	await _scene_and_combat()
 	await _perfect_reactions()
 	await _critical_feedback()
@@ -68,6 +69,65 @@ func _trial_entry_and_scoring() -> void:
 	_check(board.records.size() == 5 and board.records[0].points == 900
 		and board.records[1].ms == 45000 and board.records.back().points == 300,
 		"Leaderboard keeps the five highest scores and breaks ties by faster time")
+
+
+func _difficulty_progression() -> void:
+	var path := "%s/fanchen-difficulty-%d.cfg" % [OS.get_temp_dir(), OS.get_process_id()]
+	var legacy := ConfigFile.new()
+	legacy.set_value("bamboo", "version", 1)
+	legacy.set_value("bamboo", "records", [{"points": 12000, "ms": 90000}])
+	var fresh := Scores.new("")
+	_check(fresh.highest_unlocked() == 0 and fresh.record(100, 1000, 1) == ERR_INVALID_PARAMETER,
+		"A fresh save can only play Normal")
+	_check(legacy.save(path) == OK, "Writes a legacy score file")
+	var saved := Scores.new(path)
+	_check(saved.highest_unlocked() == 1 and saved.records_for(0).size() == 1,
+		"A legacy Normal clear unlocks Hard and retains the old leaderboard entry")
+
+	if await _load_trial(false):
+		var trial = current_scene
+		trial.scores = saved
+		trial.difficulty = 0
+		_key(KEY_LEFT)
+		_check(trial.difficulty == 0, "Keyboard cannot select below Normal")
+		trial.hud.mobile = true
+		_touch(0, trial.hud._difficulty_button(1).get_center(), true)
+		_check(trial.difficulty == 1, "Touch selects the unlocked Hard difficulty")
+		_key(KEY_LEFT)
+		_check(trial.difficulty == 0, "Keyboard can return to Normal")
+		_key(KEY_RIGHT)
+		_key(KEY_RIGHT)
+		_check(trial.difficulty == 1, "Keyboard cannot skip locked tiers")
+		_key(KEY_ENTER)
+		await _wait(0.04)
+		var wolf = _enemies(trial)[0]
+		_check(trial.started and trial.difficulty == 1 and wolf.vitals.max_hp == 46
+			and wolf.difficulty_scale.is_equal_approx(Vector3(1.15, 1.10, 0.95)),
+			"Starting on Hard applies the enemy scaling")
+		trial._lose()
+		_check(saved.highest_unlocked() == 1, "Defeat does not unlock another difficulty")
+
+	if await _load_trial(false):
+		var trial = current_scene
+		trial.scores = saved
+		trial.select_difficulty(1)
+		trial.start_trial()
+		trial._finish("试炼完成")
+		_check(trial.unlocked_difficulty == 2 and saved.records_for(1).size() == 1,
+			"A Hard win unlocks Challenge 1 and goes on its own board")
+		var reloaded := Scores.new(path)
+		_check(reloaded.highest_unlocked() == 2 and reloaded.records_for(0).size() == 1,
+			"Reload preserves the new unlock and Normal board")
+		for tier in range(2, Scores.MAX_DIFFICULTY + 1):
+			_check(reloaded.highest_unlocked() == tier and reloaded.record(15000, 90000, tier) == OK,
+				"Challenge tiers unlock one at a time")
+		_check(Scores.new(path).highest_unlocked() == Scores.MAX_DIFFICULTY
+			and reloaded.record(15000, 90000, Scores.MAX_DIFFICULTY + 1) == ERR_INVALID_PARAMETER,
+			"Challenge 4 is the final tier even after clearing it")
+
+	for suffix in ["", ".bak", ".tmp"]:
+		if FileAccess.file_exists(path + suffix):
+			DirAccess.remove_absolute(path + suffix)
 
 
 func _scene_and_combat() -> void:
@@ -206,12 +266,17 @@ func _perfect_reactions() -> void:
 	await _wait(0.17)
 	fighter.position = Vector2(435, 610)
 	fighter.dodge_cooldown = 0.0
+	wolf.position = fighter.position + Vector2(36, 0)
+	wolf.timer = 0.15
+	_key(KEY_SPACE)
+	await _wait(0.001)
+	_check(fighter.dodge_time > 0.0 and fighter.reaction == Fighter.Reaction.NONE,
+		"A roll starting outside the dodge window does not immediately earn a counter")
 	wolf.timer = 0.10
 	wolf.set_physics_process(true)
-	_key(KEY_SPACE)
-	await _wait(0.04)
+	await _wait(0.001)
 	_check(fighter.reaction == Fighter.Reaction.DODGE and trial.feedback.reactions.size() == 1,
-		"Near-hit wolf windup triggers the perfect dodge effect")
+		"An incoming hit entering the window during the first half of a roll grants one counter")
 	fighter.swing_cooldown = 0.5
 	_key(KEY_J)
 	await _wait(0.15)
@@ -221,6 +286,28 @@ func _perfect_reactions() -> void:
 	_check(wolf.vitals.hp == 164 and fighter.counter_time == 0.0 and fighter.landed_swings == 0,
 		"Buffered dodge counter hits once for 1.8x without consuming a basic critical")
 	_check(fighter.take_hit(20), "Perfect dodge invulnerability expires")
+
+	if not await _load_trial():
+		return
+	trial = current_scene
+	enemies = _enemies(trial)
+	for enemy in enemies:
+		enemy.set_physics_process(false)
+	fighter = trial.player
+	wolf = enemies[0]
+	fighter.position = Vector2(435, 610)
+	wolf.position = fighter.position + Vector2(48, 0)
+	wolf.state = Enemy.State.WINDUP
+	wolf.timer = 0.181
+	await _wait(0.04)
+	_check(not trial.feedback.switch_cue_visible, "The switch cue stays off outside 180 ms")
+	wolf.timer = 0.18
+	await _wait(0.04)
+	_check(trial.feedback.switch_cue_visible, "The switch cue lights at the 180 ms boundary")
+	_key(KEY_TAB)
+	await _wait(0.04)
+	_check(trial.player.is_mage() and trial.player.reaction == Fighter.Reaction.SWITCH
+		and not trial.feedback.switch_cue_visible, "Switching at 180 ms grants the counter and clears the cue")
 
 	if not await _load_trial():
 		return
@@ -632,6 +719,7 @@ func _keyboard_shortcuts() -> void:
 
 func _key(code: Key, shifted := false, echo := false, pressed := true) -> void:
 	var event := InputEventKey.new()
+	event.keycode = code
 	event.physical_keycode = code
 	event.shift_pressed = shifted
 	event.pressed = pressed
@@ -814,6 +902,7 @@ func _load_trial(start := true) -> bool:
 	if loaded:
 		await scene_changed
 		current_scene.scores = Scores.new("")
+		current_scene.difficulty = 0
 		if start:
 			current_scene.start_trial()
 		await _wait(0.04)

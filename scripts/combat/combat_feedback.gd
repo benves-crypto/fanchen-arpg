@@ -25,6 +25,8 @@ const REACTION_DURATION := 0.38
 
 var impacts: Array[Impact] = []
 var reactions: Array[ReactionBurst] = []
+var switch_cue_visible := false
+var switch_cue_point := Vector2.ZERO
 @onready var font := ThemeDB.fallback_font
 
 
@@ -52,6 +54,13 @@ func show_reaction(point: Vector2, direction: Vector2, swap: bool, follow_up: bo
 	queue_redraw()
 
 
+func set_switch_cue(point: Vector2, active: bool) -> void:
+	if active or switch_cue_visible:
+		switch_cue_visible = active
+		switch_cue_point = to_local(point) + Vector2(0, -68)
+		queue_redraw()
+
+
 func _process(delta: float) -> void:
 	if impacts.is_empty() and reactions.is_empty():
 		return
@@ -68,6 +77,12 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if switch_cue_visible:
+		var center := switch_cue_point
+		draw_circle(center, 14.0, Color("#f7b64345"), true, -1.0, true)
+		draw_line(center + Vector2(-20, 0), center + Vector2(20, 0), Color("#ffce68"), 3.0, true)
+		draw_line(center + Vector2(0, -13), center + Vector2(0, 13), Color("#ffce68"), 3.0, true)
+		draw_circle(center, 4.0, Color("#fff7d6"), true, -1.0, true)
 	for burst in reactions:
 		_draw_reaction(burst)
 	for impact in impacts:

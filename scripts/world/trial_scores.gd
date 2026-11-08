@@ -3,9 +3,12 @@ extends RefCounted
 const SAVE_PATH := "user://bamboo_scores.cfg"
 const VERSION := 1
 const LIMIT := 5
+const DIFFICULTY_NAMES := ["普通", "困难", "挑战 1", "挑战 2", "挑战 3", "挑战 4"]
+const MAX_DIFFICULTY := 5
 const TECHNIQUE_LIMIT := 4000
 
 var records: Array[Dictionary] = []
+var highest_cleared := -1
 var _path: String
 
 
@@ -39,13 +42,35 @@ static func grade(points: int) -> String:
 	return "C"
 
 
-func record(points: int, milliseconds: int) -> Error:
-	records.append({"points": points, "ms": milliseconds})
+func highest_unlocked() -> int:
+	return mini(highest_cleared + 1, MAX_DIFFICULTY)
+
+
+func records_for(difficulty: int) -> Array[Dictionary]:
+	return records.filter(func(entry: Dictionary) -> bool: return entry.difficulty == difficulty)
+
+
+func record(points: int, milliseconds: int, difficulty := 0) -> Error:
+	if difficulty < 0 or difficulty > highest_unlocked():
+		return ERR_INVALID_PARAMETER
+	var previous_records := records.duplicate()
+	var previous_clear := highest_cleared
+	highest_cleared = maxi(highest_cleared, difficulty)
+	records.append({"points": points, "ms": milliseconds, "difficulty": difficulty})
 	_sort()
 	if _path.is_empty():
 		return OK
+	var error := _save()
+	if error != OK:
+		records = previous_records
+		highest_cleared = previous_clear
+	return error
+
+
+func _save() -> Error:
 	var config := ConfigFile.new()
 	config.set_value("bamboo", "version", VERSION)
+	config.set_value("bamboo", "highest_cleared", highest_cleared)
 	config.set_value("bamboo", "records", records)
 	var temporary := _path + ".tmp"
 	var error := config.save(temporary)
@@ -71,8 +96,14 @@ func _read(path: String) -> bool:
 			continue
 		var points: Variant = entry.get("points")
 		var milliseconds: Variant = entry.get("ms")
-		if points is int and milliseconds is int and points > 0 and milliseconds >= 0:
-			records.append({"points": points, "ms": milliseconds})
+		var difficulty: Variant = entry.get("difficulty", 0)
+		if (points is int and milliseconds is int and points > 0 and milliseconds >= 0
+				and difficulty is int and difficulty >= 0 and difficulty <= MAX_DIFFICULTY):
+			records.append({"points": points, "ms": milliseconds, "difficulty": difficulty})
+			highest_cleared = maxi(highest_cleared, difficulty)
+	var stored_clear: Variant = config.get_value("bamboo", "highest_cleared", -1)
+	if stored_clear is int and stored_clear >= -1 and stored_clear <= MAX_DIFFICULTY:
+		highest_cleared = maxi(highest_cleared, stored_clear)
 	_sort()
 	return true
 
@@ -81,5 +112,11 @@ func _sort() -> void:
 	records.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return a.ms < b.ms if a.points == b.points else a.points > b.points
 	)
-	if records.size() > LIMIT:
-		records.resize(LIMIT)
+	var counts: Array[int] = []
+	counts.resize(DIFFICULTY_NAMES.size())
+	for difficulty in range(counts.size()):
+		counts[difficulty] = 0
+	records = records.filter(func(entry: Dictionary) -> bool:
+		counts[entry.difficulty] += 1
+		return counts[entry.difficulty] <= LIMIT
+	)

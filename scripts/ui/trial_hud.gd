@@ -71,6 +71,7 @@ var menu := "设置"
 var ui_scale := 1.0
 var result := ""
 var ranking_open := false
+var ranking_difficulty := 0
 var card_scale := 1.0
 var trial_card := Rect2()
 var start_rect := Rect2()
@@ -175,6 +176,11 @@ func _input(event: InputEvent) -> void:
 		if event is InputEventKey and key_binding_panel.handle_key(event):
 			get_viewport().set_input_as_handled()
 		return
+	if ranking_open or not trial.started:
+		if event.is_action_pressed(&"ui_left") or event.is_action_pressed(&"ui_right"):
+			_change_difficulty(-1 if event.is_action_pressed(&"ui_left") else 1)
+			get_viewport().set_input_as_handled()
+			return
 	var confirm := event.is_action_pressed(&"resume_trial", false, true) or (
 		event is InputEventJoypadButton and event.is_action_pressed(&"ui_accept"))
 	if confirm and (ranking_open or not trial.started):
@@ -249,6 +255,8 @@ func _press(point: Vector2, finger: int) -> bool:
 	if ranking_open:
 		if rank_back_rect.has_point(point) or _menu_bounds("排行榜").has_point(point):
 			_toggle_ranking()
+		else:
+			_press_difficulty(point)
 		return true
 	if _menu_bounds("排行榜").has_point(point):
 		_toggle_ranking()
@@ -256,6 +264,8 @@ func _press(point: Vector2, finger: int) -> bool:
 	if not trial.started:
 		if start_rect.has_point(point):
 			trial.start_trial()
+		else:
+			_press_difficulty(point)
 		return true
 	if paused or not result.is_empty():
 		if restart_rect.has_point(point):
@@ -366,6 +376,8 @@ func show_result(value: String) -> void:
 
 func _toggle_ranking() -> void:
 	ranking_open = not ranking_open
+	if ranking_open:
+		ranking_difficulty = trial.difficulty
 	_reset_touch()
 	trial.player.pending.clear()
 	get_tree().paused = ranking_open or paused or not result.is_empty()
@@ -387,13 +399,16 @@ func _draw() -> void:
 	_draw_fighter(player, safe.position + Vector2(23, 22) * ui_scale, true)
 	_draw_fighter(trial.reserve, safe.position + Vector2(399, 29) * ui_scale, false)
 	var objective := safe.position + Vector2(81, 234) * ui_scale
+	var title: String = trial.stage_title()
 	var quest: String = trial.objective()
+	var title_width := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, _px(18)).x
 	var quest_width := font.get_string_size(quest, HORIZONTAL_ALIGNMENT_LEFT, -1, _px(22)).x
+	var text_width := maxf(title_width, quest_width)
 	var tablet := Rect2(objective + Vector2(-17, -27) * ui_scale,
-		Vector2(maxf(178.0 * ui_scale, quest_width + 38.0 * ui_scale), 65.0 * ui_scale))
+		Vector2(maxf(178.0 * ui_scale, text_width + 38.0 * ui_scale), 65.0 * ui_scale))
 	_panel(tablet)
 	_hud_art(11, objective + Vector2(-24, -4) * ui_scale, 64.0 * ui_scale)
-	_text(trial.stage_title(), objective + Vector2(8, -3) * ui_scale, _px(18), GOLD)
+	_text(title, objective + Vector2(8, -3) * ui_scale, _px(18), GOLD)
 	_text(quest, objective + Vector2(8, 24) * ui_scale, _px(22), MINT)
 	for label in MENU_ART:
 		var bounds := _menu_bounds(label)
@@ -434,19 +449,55 @@ func _draw_trial_card(kicker: String, title: String) -> void:
 	_card_line(title, 102, 40, MINT)
 
 
+func _difficulty_button(step: int) -> Rect2:
+	var center := _card_point(255 + 112 * step, 137 if ranking_open else 187)
+	var extent := Vector2(46, 40) * card_scale
+	return Rect2(center - extent / 2.0, extent)
+
+
+func _change_difficulty(step: int) -> void:
+	if ranking_open:
+		ranking_difficulty = clampi(ranking_difficulty + step, 0, trial.scores.highest_unlocked())
+	else:
+		trial.select_difficulty(step)
+
+
+func _press_difficulty(point: Vector2) -> void:
+	for step in [-1, 1]:
+		if _difficulty_button(step).has_point(point):
+			_change_difficulty(step)
+			return
+
+
+func _draw_difficulty(difficulty: int, baseline: float) -> void:
+	_card_line(SCORES.DIFFICULTY_NAMES[difficulty], baseline, 23, MINT)
+	if difficulty > 0:
+		_card_button(_difficulty_button(-1), "‹")
+	if difficulty < trial.scores.highest_unlocked():
+		_card_button(_difficulty_button(1), "›")
+
+
 func _draw_start() -> void:
 	_draw_trial_card("凡尘修仙录  ·  1-1 至 1-3", "竹林试炼")
-	_card_line("清竹径  ·  战精英  ·  斩兽王", 162, 23, GOLD)
-	_card_line("伤害、操作与通关表现将计入最终评分", 208, 18, MUTED)
+	_card_line("清竹径  ·  战精英  ·  斩兽王", 145, 21, GOLD)
+	_draw_difficulty(trial.difficulty, 194)
+	if trial.difficulty < SCORES.MAX_DIFFICULTY:
+		var next: String = SCORES.DIFFICULTY_NAMES[trial.difficulty + 1]
+		var hint := "可重玩已解锁的难度"
+		if trial.difficulty == trial.scores.highest_unlocked():
+			hint = "通关后解锁%s" % next
+		_card_line(hint, 234, 16, MUTED)
 	_card_button(start_rect, "开始试炼")
 	if not mobile:
 		var bindings := get_node_or_null("/root/KeyBindings")
 		var key: String = bindings.label_for(&"resume_trial") if bindings else "Enter"
-		_card_line("%s 开始    /    F2 排行榜" % key, 343, 16, MUTED)
+		_card_line("← → 难度    /    %s 开始    /    F2 排行榜" % key, 343, 16, MUTED)
 
 
 func _draw_score_result() -> void:
-	_draw_trial_card("竹林试炼  ·  " + result, "%d 分  ·  %s" % [trial.final_score.total, trial.final_score.grade])
+	var difficulty: String = SCORES.DIFFICULTY_NAMES[trial.difficulty]
+	_draw_trial_card("竹林试炼  ·  %s  ·  %s" % [difficulty, result],
+		"%d 分  ·  %s" % [trial.final_score.total, trial.final_score.grade])
 	var score: Dictionary = trial.final_score
 	_card_line("伤害 %d    操作 %d    过关 %d" % [score.damage, score.technique, score.progress],
 		155, 20, MINT)
@@ -454,22 +505,27 @@ func _draw_score_result() -> void:
 	_card_line("用时 %s    击败 %d" % [_format_time(floori(trial.elapsed)), trial.defeated_total],
 		235, 17, MUTED)
 	if trial.score_save_error != OK:
-		_card_line("榜单写入失败，本局成绩未保存到磁盘", 276, 16, VERMILION)
+		_card_line("存档写入失败，本局成绩和进度未保存", 276, 16, VERMILION)
+	elif trial.unlocked_difficulty >= 0:
+		_card_line("已解锁%s" % SCORES.DIFFICULTY_NAMES[trial.unlocked_difficulty], 276, 19, GOLD)
+	elif result == "试炼完成" and trial.difficulty == SCORES.MAX_DIFFICULTY:
+		_card_line("已完成最高难度", 276, 19, GOLD)
 	elif result == "试炼完成":
 		_card_line("已与本机前五名比较", 276, 16, GOLD)
 	else:
 		_card_line("通关成绩可进入排行榜", 276, 16, MUTED)
-	_card_button(restart_rect, "重新开始")
+	_card_button(restart_rect, "继续挑战" if trial.unlocked_difficulty >= 0 else "重新开始")
 
 
 func _draw_ranking() -> void:
 	_draw_trial_card("竹林试炼  ·  本机前五名", "试炼排行榜")
-	var records: Array[Dictionary] = trial.scores.records
+	_draw_difficulty(ranking_difficulty, 144)
+	var records: Array[Dictionary] = trial.scores.records_for(ranking_difficulty)
 	if records.is_empty():
-		_card_line("还没有通关成绩", 205, 22, MUTED)
+		_card_line("还没有通关成绩", 225, 22, MUTED)
 	for index in range(records.size()):
 		var entry: Dictionary = records[index]
-		var y := 151.0 + index * 32.0
+		var y := 180.0 + index * 28.0
 		var size_px := maxi(1, roundi(19 * card_scale))
 		var tint := GOLD if index == 0 else MINT
 		_text("%02d" % (index + 1), _card_point(85, y), size_px, tint)

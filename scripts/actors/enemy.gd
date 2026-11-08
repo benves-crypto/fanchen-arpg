@@ -26,6 +26,7 @@ const PROFILES := [
 @onready var animation: AnimationPlayer = $Visual/AnimationPlayer
 @onready var reach: Area2D = $AttackRange
 
+var difficulty_scale := Vector3.ONE
 var reaction_claimed := false
 var target: CharacterBody2D
 var state := State.IDLE
@@ -38,8 +39,8 @@ var boss_fan_paths := PackedVector2Array()
 
 func _ready() -> void:
 	profile = PROFILES[kind]
-	vitals.max_hp = profile.hp
-	vitals.hp = profile.hp
+	vitals.max_hp = roundi(profile.hp * difficulty_scale.x)
+	vitals.hp = vitals.max_hp
 	vitals.defense = profile.defense
 	vitals.damaged.connect(_on_hurt)
 	vitals.died.connect(_die)
@@ -104,6 +105,7 @@ func _physics_process(delta: float) -> void:
 					boss_fan_paths.clear()
 					timer = 0.68 if _boss_enraged() else 1.05
 					queue_redraw()
+				timer *= difficulty_scale.z
 		State.RECOVER:
 			timer -= delta
 			if timer <= 0.0:
@@ -135,12 +137,13 @@ func _strike() -> void:
 	art.pulse(1)
 	attacked.emit()
 	if not boss_fan_paths.is_empty():
+		var fan_damage := roundi(18 * difficulty_scale.y)
 		for index in range(boss_fan_paths.size()):
-			projectile_requested.emit(global_position, _boss_fan_heading(index), 18)
+			projectile_requested.emit(global_position, _boss_fan_heading(index), fan_damage)
 	elif kind == Kind.SPIDER:
-		projectile_requested.emit(global_position, facing, profile.damage)
+		projectile_requested.emit(global_position, facing, roundi(profile.damage * difficulty_scale.y))
 	elif _melee_hits(target):
-		target.take_hit(profile.damage, target.global_position.direction_to(global_position))
+		target.take_hit(roundi(profile.damage * difficulty_scale.y), target.global_position.direction_to(global_position))
 
 
 func _boss_enraged() -> bool:

@@ -11,6 +11,15 @@ const SEALED_JAR := preload("res://assets/items/sealed_jar.png")
 const Scores := preload("res://scripts/world/trial_scores.gd")
 const Progress := preload("res://scripts/world/trial_progress.gd")
 const CombatFeedback := preload("res://scripts/combat/combat_feedback.gd")
+# Enemy health, damage and time spent recovering after an attack.
+const DIFFICULTY_SCALES := [
+	Vector3(1.00, 1.00, 1.00),
+	Vector3(1.15, 1.10, 0.95),
+	Vector3(1.30, 1.20, 0.90),
+	Vector3(1.45, 1.30, 0.85),
+	Vector3(1.65, 1.40, 0.80),
+	Vector3(1.85, 1.50, 0.75),
+]
 const SKIN_SETTINGS_PATH := "user://skin.cfg"
 const SKIN_SETTING := "combat_skin"
 const MEDICINE_RECOVERY := 5.0
@@ -31,6 +40,8 @@ var cultivation_skin := true
 var started := false
 var stage := 1
 var scores := Scores.new()
+var difficulty := 0
+var unlocked_difficulty := -1
 var final_score := {}
 var score_save_error := OK
 var damage_dealt := 0
@@ -59,6 +70,7 @@ var feedback := CombatFeedback.new()
 
 
 func _ready() -> void:
+	difficulty = scores.highest_unlocked()
 	feedback.z_index = 8
 	add_child(feedback)
 	charge_cue.pitch_scale = 1.35
@@ -92,9 +104,15 @@ func _ready() -> void:
 	add_child(exit_area)
 
 
+func select_difficulty(step: int) -> void:
+	if not started:
+		difficulty = clampi(difficulty + step, 0, scores.highest_unlocked())
+
+
 func start_trial() -> void:
 	if started:
 		return
+	difficulty = clampi(difficulty, 0, scores.highest_unlocked())
 	started = true
 	actors.process_mode = Node.PROCESS_MODE_INHERIT
 	_start_stage()
@@ -143,7 +161,7 @@ func _advance_stage() -> void:
 
 
 func stage_title() -> String:
-	return "1-%d  %s" % [stage, STAGE_NAMES[stage - 1]]
+	return "1-%d  %s  ·  %s" % [stage, STAGE_NAMES[stage - 1], Scores.DIFFICULTY_NAMES[difficulty]]
 
 
 func boss_health() -> float:
@@ -197,13 +215,15 @@ func _physics_process(_delta: float) -> void:
 	if switch_requested:
 		switch_requested = false
 		switch_fighter()
+	var threat := _switch_threat()
+	feedback.set_switch_cue(player.global_position, threat != null)
 
 
-func _find_threat(fighter: CharacterBody2D) -> Node2D:
+func _find_threat(fighter: CharacterBody2D, window := Fighter.PERFECT_WINDOW) -> Node2D:
 	if fighter != player:
 		return null
 	var best: Node2D
-	var earliest := Fighter.PERFECT_WINDOW
+	var earliest := window
 	for threat in actors.get_children():
 		if threat is Enemy:
 			var eta: float = threat.reaction_eta(fighter, earliest)
@@ -219,11 +239,19 @@ func _find_threat(fighter: CharacterBody2D) -> Node2D:
 	return best
 
 
+func _can_switch() -> bool:
+	return started and outcome.is_empty() and reserve.vitals.hp > 0 and player.dodge_time == 0.0
+
+
+func _switch_threat() -> Node2D:
+	return _find_threat(player, Fighter.PERFECT_SWITCH_WINDOW) if _can_switch() else null
+
+
 func switch_fighter() -> void:
-	if not outcome.is_empty() or reserve.vitals.hp <= 0 or player.dodge_time > 0.0:
+	if not _can_switch():
 		return
 	var outgoing = player
-	var threat := _find_threat(outgoing)
+	var threat := _switch_threat()
 	var touch_move: Vector2 = outgoing.touch_move
 	outgoing.pending.clear()
 	outgoing.clear_counter()
@@ -340,6 +368,7 @@ func objective() -> String:
 func _spawn(kind: int, point: Vector2, shrine_enemy := false) -> CharacterBody2D:
 	var enemy := EnemyScene.instantiate()
 	enemy.kind = kind
+	enemy.difficulty_scale = DIFFICULTY_SCALES[difficulty]
 	enemy.target = player
 	enemy.position = point
 	actors.add_child(enemy)
@@ -481,7 +510,10 @@ func _finish(result: String) -> void:
 	final_score = Scores.calculate(damage_dealt, technique_points, 3 if won else stage - 1,
 		elapsed, shrine_defeats == SHRINE_FOES)
 	if won:
-		score_save_error = scores.record(final_score.total, roundi(elapsed * 1000.0))
+		var before := scores.highest_unlocked()
+		score_save_error = scores.record(final_score.total, roundi(elapsed * 1000.0), difficulty)
+		if scores.highest_unlocked() > before:
+			unlocked_difficulty = scores.highest_unlocked()
 	var cue: AudioStreamPlayer = $Audio/Victory if won else $Audio/Defeat
 	cue.play()
 	hud.show_result(result)
