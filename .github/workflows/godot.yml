@@ -1,0 +1,76 @@
+name: Godot checks and Android debug
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-and-export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check cross-platform paths
+        run: python3 scripts/check_paths.py
+      - name: Install Godot 4.7.2 Standard and export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable
+          curl -fL --retry 3 "$base/Godot_v4.7.2-stable_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+          echo "$RUNNER_TEMP/godot" >> "$GITHUB_PATH"
+          curl -fL --retry 3 "$base/Godot_v4.7.2-stable_export_templates.tpz" -o /tmp/templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
+          unzip -q /tmp/templates.tpz -d "$RUNNER_TEMP/templates"
+          cp -a "$RUNNER_TEMP/templates/templates/." "$HOME/.local/share/godot/export_templates/4.7.2.stable/"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify Godot and import project
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT="$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64"
+          "$GODOT" --version
+          if [[ ! -f project.godot ]]; then
+            echo '::warning::No project.godot yet; import, tests and APK export are not verified.'
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'present=true' >> "$GITHUB_OUTPUT"
+          "$GODOT" --headless --editor --path . --import
+          if [[ -f tests/run_tests.gd ]]; then
+            "$GODOT" --headless --path . --script res://tests/run_tests.gd
+          else
+            echo '::warning::No tests/run_tests.gd; automated game tests have not run.'
+          fi
+      - name: Configure Android SDK and debug signing
+        if: steps.project.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager "platform-tools" "build-tools;35.0.1" "platforms;android-35" "cmake;3.10.2.4988404" "ndk;28.1.13356709"
+          mkdir -p "$HOME/.config/godot" "$HOME/.android"
+          keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -validity 10000
+          printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" "$HOME/.android/debug.keystore" > "$HOME/.config/godot/editor_settings-4.tres"
+      - name: Build Android debug APK
+        if: steps.project.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f export_presets.cfg ]] || ! grep -Eq '^name="Android"$' export_presets.cfg; then
+            echo '::warning::Add an Android export preset named Android to enable APK export.'
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/apk"
+          "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" --headless --path . --export-debug Android "$RUNNER_TEMP/apk/fanchen-debug.apk"
+      - uses: actions/upload-artifact@v4
+        if: steps.project.outputs.present == 'true'
+        with:
+          name: android-debug-apk
+          path: ${{ runner.temp }}/apk/*.apk
+          if-no-files-found: warn
