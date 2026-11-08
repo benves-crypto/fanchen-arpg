@@ -40,4 +40,4 @@ Thumbs.db
 *.swp
 *.swo
 
-# Keep Godot's source UID sidecars (*.gd.uid); .godot/ is generated cache.
+# Keep source sidecars (*.uid and *.import); .godot/ and .import/ are caches.
