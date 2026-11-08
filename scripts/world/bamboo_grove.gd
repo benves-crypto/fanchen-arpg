@@ -3,20 +3,32 @@ extends Node2D
 const WORLD_SIZE := Vector2(2304, 1152)
 const SPAWN := Vector2(225, 638)
 const EXIT := Vector2(2150, 455)
+const SHRINE := Vector2(1940, 355)
+const SHRINE_RADIUS := 38.0
 const PATH := [Vector2(105, 655), Vector2(380, 635), Vector2(645, 560),
 	Vector2(960, 565), Vector2(1200, 660), Vector2(1480, 620),
 	Vector2(1780, 478), EXIT, Vector2(2220, 455)]
 
+const GROUND := preload("res://assets/world/bamboo_ground.webp")
+const PROPS := preload("res://assets/world/bamboo_props.png")
+const PROP_SIZE := Vector2(128, 128)
+
+var stage := 1
 var portal_open := false
-var grass := PackedVector2Array()
+var shrine_lit := false:
+	set(value):
+		shrine_lit = value
+		queue_redraw()
 var obstacles: Array[Vector3] = []
 
 
 func _ready() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7139
+	# Keep the original obstacle sequence after moving ground details into the texture.
 	for index in range(2000):
-		grass.append(Vector2(rng.randi_range(12, 2290), rng.randi_range(12, 1138)))
+		rng.randi_range(12, 2290)
+		rng.randi_range(12, 1138)
 	for index in range(145):
 		var point := Vector2(rng.randi_range(35, 2265), rng.randi_range(55, 1100))
 		if _road_distance(point) < 140 or _near_obstacle(point):
@@ -30,6 +42,7 @@ func _ready() -> void:
 		ornament.position = point
 		ornament.rock = rock
 		ornament.variant = index % 3
+		ornament.bush = not rock and index % 5 < 3
 		$Scenery.add_child(ornament)
 	_collider(Vector2(1152, -16), Vector2(2368, 32))
 	_collider(Vector2(1152, 1168), Vector2(2368, 32))
@@ -74,39 +87,24 @@ func unlock_exit() -> void:
 	queue_redraw()
 
 
+func set_stage(value: int) -> void:
+	stage = value
+	portal_open = false
+	self_modulate = [Color.WHITE, Color("#b9ccd7"), Color("#ead1b9")][stage - 1]
+	queue_redraw()
+
+
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, WORLD_SIZE), Color("#254439"))
-	_paint_road(141.0, Color("#3a5743"))
-	_paint_road(110.0, Color("#53644a"))
-	_paint_road(91.0, Color("#59694e"))
-	_paint_road(54.0, Color("#627056"))
-	for point in grass:
-		var near_road := _road_distance(point) < 55.0
-		var color := Color("#798061") if near_road else Color("#365644")
-		draw_rect(Rect2(point, Vector2(4, 2) if near_road else Vector2(3, 7)), color)
-		if not near_road:
-			draw_rect(Rect2(point + Vector2(4, 4), Vector2(4, 3)), Color("#4a6650"))
-	_marker(SPAWN, Color("#9ac9a1"), 27)
-	_marker(Vector2(1845, 475), Color("#a88559"), 68)
-	var portal := Color("#a3ffe0") if portal_open else Color("#8d8e75")
-	_marker(EXIT, portal, 34)
-	draw_rect(Rect2(EXIT + Vector2(-30, -59), Vector2(8, 66)), portal.darkened(0.25))
-	draw_rect(Rect2(EXIT + Vector2(22, -59), Vector2(8, 66)), portal.darkened(0.25))
-	draw_rect(Rect2(EXIT + Vector2(-38, -59), Vector2(76, 8)), portal)
-	draw_rect(Rect2(EXIT + Vector2(-29, -72), Vector2(58, 9)), Color("#252f2a"))
-	if portal_open:
-		draw_rect(Rect2(EXIT + Vector2(-22, -50), Vector2(44, 51)), Color("#a3ffe062"))
+	draw_texture_rect(GROUND, Rect2(Vector2.ZERO, WORLD_SIZE), false)
+	_draw_landmark(2, Rect2(SPAWN - Vector2(28, 28), Vector2(56, 56)))
+	var ring_size := 250.0 if stage == 3 else 140.0
+	_draw_landmark(3, Rect2(Vector2(1845, 475) - Vector2.ONE * ring_size / 2.0, Vector2.ONE * ring_size))
+	_draw_landmark(5 if portal_open else 4, Rect2(EXIT - Vector2(74, 139), Vector2(148, 162)))
+	if shrine_lit:
+		draw_circle(SHRINE, SHRINE_RADIUS, Color("#193b34cc"), true, -1.0, true)
+		draw_arc(SHRINE, SHRINE_RADIUS, 0.0, TAU, 48, Color("#efd590"), 2.0, true)
+		_draw_landmark(2, Rect2(SHRINE - Vector2(24, 24), Vector2(48, 48)))
 
 
-func _paint_road(width: float, color: Color) -> void:
-	for index in range(PATH.size() - 1):
-		draw_line(PATH[index], PATH[index + 1], color, width)
-		draw_circle(PATH[index], width / 2.0, color)
-	draw_circle(PATH[-1], width / 2.0, color)
-
-
-func _marker(point: Vector2, tint: Color, radius: int) -> void:
-	draw_arc(point, radius, 0, TAU, 36, tint, 2.0)
-	for index in range(8):
-		var spoke := point + Vector2.from_angle(index * TAU / 8.0) * radius
-		draw_rect(Rect2(spoke - Vector2(3, 3), Vector2(6, 6)), tint)
+func _draw_landmark(index: int, bounds: Rect2) -> void:
+	draw_texture_rect_region(PROPS, bounds, Rect2(Vector2(index * PROP_SIZE.x, 0), PROP_SIZE))

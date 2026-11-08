@@ -2,6 +2,9 @@ extends Area2D
 
 signal collected
 
+const PROPS := preload("res://assets/world/bamboo_props.png")
+
+var item_texture: Texture2D
 var age := 0.0
 var taken := false
 
@@ -22,8 +25,6 @@ func _collect(player: Node2D) -> void:
 	if taken or player.vitals.hp <= 0:
 		return
 	taken = true
-	player.vitals.heal(28)
-	player.mp = minf(player.max_mp, player.mp + 12.0)
 	collected.emit()
 	queue_free()
 
@@ -34,9 +35,9 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, 18, Color("#e2b46d40"))
-	var y := sin(age * 4.0) * 3.0
-	draw_rect(Rect2(-8, y - 10, 16, 20), Color("#3d3a35"))
-	draw_rect(Rect2(-6, y - 4, 12, 12), Color("#e39968"))
-	draw_rect(Rect2(-4, y - 13, 8, 5), Color("#e7cb86"))
-	draw_rect(Rect2(-4, y - 2, 3, 6), Color("#ffe9bb"))
+	var bob := sin(age * 4.0) * 3.0
+	if item_texture:
+		var size := item_texture.get_size() * 0.75
+		draw_texture_rect(item_texture, Rect2(Vector2(-size.x / 2.0, -size.y + bob), size), false)
+		return
+	draw_texture_rect_region(PROPS, Rect2(-25, -36 + bob, 50, 50), Rect2(768, 0, 128, 128))
