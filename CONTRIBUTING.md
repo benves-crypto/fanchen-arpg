@@ -1,4 +1,3 @@
-/opt/homebrew/Library/Homebrew/cmd/shellenv.sh: line 18: /bin/ps: Operation not permitted
 # 跨设备开发
 
 所有设备使用同一个 GitHub 仓库 `benves-crypto/fanchen-arpg`。使用 Godot 4.7.2 **Standard** 和 GDScript；Mac Apple Silicon 使用 macOS 版本，公司电脑使用对应 Windows 或 macOS 版本，Cloud 和 CI 使用 Linux x86_64 版本。不要把 Linux 可执行文件当作其他系统的编辑器使用。
