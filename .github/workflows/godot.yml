@@ -48,8 +48,13 @@ jobs:
           else
             echo '::warning::No tests/run_tests.gd; automated game tests have not run.'
           fi
+          if [[ -f export_presets.cfg ]] && grep -Eq '^name="Android"$' export_presets.cfg; then
+            echo 'android=true' >> "$GITHUB_OUTPUT"
+          else
+            echo '::warning::Add an Android export preset named Android to enable APK export.'
+          fi
       - name: Configure Android SDK and debug signing
-        if: steps.project.outputs.present == 'true'
+        if: steps.project.outputs.android == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -58,18 +63,14 @@ jobs:
           keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -validity 10000
           printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" "$HOME/.android/debug.keystore" > "$HOME/.config/godot/editor_settings-4.tres"
       - name: Build Android debug APK
-        if: steps.project.outputs.present == 'true'
+        if: steps.project.outputs.android == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -f export_presets.cfg ]] || ! grep -Eq '^name="Android"$' export_presets.cfg; then
-            echo '::warning::Add an Android export preset named Android to enable APK export.'
-            exit 0
-          fi
           mkdir -p "$RUNNER_TEMP/apk"
           "$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" --headless --path . --export-debug Android "$RUNNER_TEMP/apk/fanchen-debug.apk"
       - uses: actions/upload-artifact@v4
-        if: steps.project.outputs.present == 'true'
+        if: steps.project.outputs.android == 'true'
         with:
           name: android-debug-apk
           path: ${{ runner.temp }}/apk/*.apk
